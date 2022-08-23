@@ -53,8 +53,8 @@ else:
 
 
 
-client_id = 'd19d9797c83a41f590656ca6bdc7d6fc'
-client_secret = 'ab097c68d2904b6d9232f7e7d89a5155'
+client_id = 'SECRET'
+client_secret = 'SECRET'
 
 
 
