@@ -1,0 +1,362 @@
+---
+title: "NesetErtas-SentimentsPaper"
+author: "Yasin Kütük"
+date: "23/06/2021"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(digits=2, scipen=999)
+
+```
+
+
+```{r , echo=FALSE, include = FALSE}
+######################################################################
+#                       _         _            _           _        #
+#    _   _   __ _  ___ (_) _ __  | | __ _   _ | |_  _   _ | | __    #
+#   | | | | / _  |/ __|| || '_ \ | |/ /| | | || __|| | | || |/ /    #
+#   | |_| || (_| |\__ \| || | | ||   < | |_| || |_ | |_| ||   <     #
+#    \__, | \__,_||___/|_||_| |_||_|\_\ \__,_| \__| \__,_||_|\_\    #
+#    |___/                                                          #
+#    ____                            _  _                           #
+#   / __ \   __ _  _ __ ___    __ _ (_)| |    ___  ___   _ __ ___   #
+#  / / _  | / _  || '_   _ \  / _  || || |   / __|/ _ \ | '_   _ \  #
+# | | (_| || (_| || | | | | || (_| || || | _| (__| (_) || | | | | | #
+#  \ \__,_| \__, ||_| |_| |_| \__,_||_||_|(_)\___|\___/ |_| |_| |_| #
+#   \____/  |___/                                                   #
+#####################################################################
+#@author: Yasin KÜTÜK          ######################################
+#@web   : yasinkutuk.com       ######################################
+#@email : yasinkutuk@gmail.com ######################################
+#####################################################################
+
+
+
+#Initials#####
+options(digits = 4)
+if(.Platform$OS.type=="windows"){
+  path = 'd://Dropbox//_My_Research//NesetErtas-Paper/'
+  respath = 'd://Dropbox//_My_Research//NesetErtas-Paper//05.Res//'
+  print("Hocam Windows'dasın!")
+} else {
+  path = '/media/DRIVE/Dropbox/_My_Research/NesetErtas-Paper/03.Data/'
+  respath = '/media/DRIVE/Dropbox/_My_Research/NesetErtas-Paper/05.Res/'
+  print("Abi Linux bu!")
+}
+
+
+# Check to see if packages are installed. Install them if they are not, then load them into the R session.
+# Package Check Function ####
+check.packages <- function(pkg){
+  new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+  if (length(new.pkg)) 
+    install.packages(new.pkg, dependencies = TRUE)
+  sapply(pkg, require, character.only = TRUE)
+}
+
+# Pack Installations ####
+packages<-c('openxlsx','xlsx','dplyr','data.table', 'pander', 'sjPlot', 'stargazer',
+            'kableExtra', 'summarytools', 'DT', 'htmltools','tidyr','tidyverse',
+            'wordcloud', 'wordcloud2', 'RColorBrewer', 'tm', 'hms', 'ngram')
+```
+
+# Are all packages included in R?
+
+```{r, echo = FALSE, results = TRUE, message = FALSE, warning = FALSE, error = FALSE}
+check.packages(packages)
+```
+
+
+```{r, echo=FALSE, include = FALSE}
+# Read Data 
+turkuler <- openxlsx::read.xlsx(paste0(path,'NesetErtas.xlsx'), sheet = 2)
+
+# Drop Duplicated Songs
+turkuler <- turkuler[turkuler$tekrar!=1,]
+#courseinfo$ranking <- as.numeric(as.character(courseinfo$ranking))
+#courseinfo$score_count <- as.numeric(as.character(courseinfo$score_count))
+#courseinfo$rating <- as.numeric(as.character(courseinfo$views))
+```
+
+
+# Derlenen türkü sözü sayısı:
+```{r ,  echo = FALSE, results = TRUE}
+nrow(turkuler)
+```
+
+
+# Türkülerin harf ve 1-gram sayılarının hesaplanması:
+```{r ,  echo = FALSE}
+soz <- data.frame(as.character(turkuler$soz))
+colnames(soz) <- 'soz'
+soz <- data.frame(apply(soz, 1, function(x)  gsub("&#10;", " ", x)))
+colnames(soz) <- 'soz'
+
+countsoz <- data.frame(apply(soz, 1, function(x)  nchar(as.character(x), type = "chars", allowNA = FALSE, keepNA = NA)))
+names(countsoz) <- 'karakter'
+wordsoz <- data.frame(apply(soz, 1, function(x)  lengths(gregexpr("\\W+", as.character(x))) + 1))
+names(wordsoz) <- 'kelimesayisi'
+turkuler$karakter <- countsoz
+turkuler$kelimesayisi <- wordsoz
+
+
+docs <- Corpus(VectorSource(turkuler$lemmas))
+
+dtm <- TermDocumentMatrix(docs) 
+matrix <- as.matrix(dtm) 
+words <- sort(rowSums(matrix),decreasing=TRUE) 
+df <- data.frame(word = names(words),freq=words)
+```
+
+# Türkülerin 2-gram sayılarının hesaplanması, en fazla 1000 adet:
+```{r ,  echo = FALSE}
+ng <- ngram(turkuler$lemmas, n=2)
+df2 <- data.frame(get.phrasetable(ng))
+df2 <- df2[0:1000,c('ngrams','freq')]
+```
+
+
+
+# En çok harf kullanılan ilk 3 türkü:
+```{r ,  echo = FALSE, results = TRUE}
+turku1 <- turkuler[,c('turkuadi','karakter', 'kelimesayisi')]
+turku1 <- turku1[order(-turku1$karakter),]
+kbl(turku1[1:10,c('turkuadi','karakter', 'kelimesayisi')], caption = "En Çok Harf Kullanılan İlk 3 Türkü", row.names = F) %>%
+  kable_classic_2(full_width = F) %>%
+  kable_paper("striped", full_width = F)  %>%
+  row_spec(1:3,bold = T, color = "white", background = "#D7261E")
+```
+
+
+# En az harf kullanılan ilk 3 türkü:
+```{r ,  echo = FALSE, results = TRUE}
+turku1 <- turkuler[,c('turkuadi','karakter', 'kelimesayisi')]
+turku1 <- turku1[order(turku1$karakter),]
+kbl(turku1[1:10,c('turkuadi','karakter', 'kelimesayisi')], caption = "En Az Harf Kullanılan İlk 3 Türkü", row.names = F) %>%
+  kable_classic_2(full_width = F) %>%
+  kable_paper("striped", full_width = F)  %>%
+  row_spec(1:3,bold = T, color = "white", background = "#D7261E")
+```
+
+
+# En çok kelime kullanılan ilk 3 türkü:
+```{r ,  echo = FALSE, results = TRUE}
+turku1 <- turkuler[,c('turkuadi','karakter', 'kelimesayisi')]
+turku1 <- turku1[order(-turku1$kelimesayisi),]
+kbl(turku1[1:10,c('turkuadi','karakter', 'kelimesayisi')], caption = "En Çok Kelime Kullanılan İlk 3 Türkü", row.names = F) %>%
+  kable_classic_2(full_width = F) %>%
+  kable_paper("striped", full_width = F)  %>%
+  row_spec(1:3,bold = T, color = "white", background = "#D7261E")
+```
+
+
+# En az kelime kullanılan ilk 3 türkü:
+```{r ,  echo = FALSE, results = TRUE}
+turku1 <- turkuler[,c('turkuadi','karakter', 'kelimesayisi')]
+turku1 <- turku1[order(turku1$kelimesayisi),]
+kbl(turku1[1:10,c('turkuadi','karakter', 'kelimesayisi')], caption = "En Az Kelime Kullanılan İlk 3 Türkü", row.names = F) %>%
+  kable_classic_2(full_width = F) %>%
+  kable_paper("striped", full_width = F)  %>%
+  row_spec(1:3,bold = T, color = "white", background = "#D7261E")
+```
+
+
+
+# Türkü Sözlerinin Tanımlayıcı İstatistikleri
+```{r , echo=FALSE}
+specdesc <- turkuler[,c('BERT-TR1-Ort','BERT-TR1-Var','BERT-TR2-Ort','BERT-TR2-Var',
+'BERT-TR3-Ort','BERT-TR3-Var', 'BERT-TR-Ort', 'BERT-TR-Var-Ort')]
+specdesc <- specdesc %>%
+  summarise_each(funs(min = min(., na.rm = TRUE), 
+                      median = median(., na.rm = TRUE),
+                      mean = mean(., na.rm = TRUE), 
+                      max = max(., na.rm = TRUE),
+                      sum = sum(., na.rm = TRUE), 
+                      sd = sd(., na.rm = TRUE)))
+
+specdesc <- specdesc %>% gather(stat, val) %>%
+  separate(stat, into = c("var", "stat"), sep = '_') %>%
+  spread(stat, val) %>%
+  select(var, min, median, mean, max, sum, sd)
+
+names(specdesc) <- c('Değişken','Minimum', 'Ortanca','Ortalama', 'Maximum', 'Toplam', 'Standart Sapma')
+
+```
+
+```{r ,  echo = FALSE, results = TRUE}
+kbl(specdesc, caption = "BERT Modellerinin Tanımlayıcı İstatistikleri", row.names = F)%>%
+  kable_classic_2(full_width = T) %>%
+  kable_paper("striped", full_width = T)
+```
+
+# Top 3 funny songs
+```{r ,  echo = FALSE, results = TRUE}
+turku1 <- turkuler[,c('turkuadi','BERT-TR-Ort','BERT-TR-Var-Ort')]
+turku1 <- turku1[order(-turku1$`BERT-TR-Ort`),]
+kbl(turku1[1:10,c('turkuadi','BERT-TR-Ort','BERT-TR-Var-Ort')], caption = "En Efkarlı İlk 10 Türkü (BERT-TR-Ort)", row.names = F) %>%
+  kable_classic_2(full_width = F) %>%
+  kable_paper("striped", full_width = F)  %>%
+  row_spec(1:3,bold = T, color = "white", background = "#D7261E")
+```
+
+# Top 3 sad songs
+```{r ,  echo = FALSE, results = TRUE}
+turku1 <- turkuler[,c('turkuadi','BERT-TR-Ort','BERT-TR-Var-Ort')]
+turku1 <- turku1[order(turku1$`BERT-TR-Ort`),]
+kbl(turku1[1:10,c('turkuadi','BERT-TR-Ort','BERT-TR-Var-Ort')], caption = "En Eğlenceli İlk 10 Türkü (BERT-TR-Ort)", row.names = F) %>%
+  kable_classic_2(full_width = F) %>%
+  kable_paper("striped", full_width = F)  %>%
+  row_spec(1:3,bold = T, color = "white", background = "#D7261E")
+```
+
+
+# Top 3 volatile songs
+```{r ,  echo = FALSE, results = TRUE}
+turku1 <- turkuler[,c('turkuadi','BERT-TR-Ort','BERT-TR-Var-Ort')]
+turku1 <- turku1[order(-turku1$`BERT-TR-Var-Ort`),]
+kbl(turku1[1:10,c('turkuadi','BERT-TR-Ort','BERT-TR-Var-Ort')], caption = "En Akışkan İlk 10 Türkü (BERT-TR-Var-Ort)", row.names = F) %>%
+  kable_classic_2(full_width = F) %>%
+  kable_paper("striped", full_width = F)  %>%
+  row_spec(1:3,bold = T, color = "white", background = "#D7261E")
+```
+
+
+# Top 3 stable songs
+```{r ,  echo = FALSE, results = TRUE}
+turku1 <- turkuler[,c('turkuadi','BERT-TR-Ort','BERT-TR-Var-Ort')]
+turku1 <- turku1[order(turku1$`BERT-TR-Var-Ort`),]
+kbl(turku1[1:10,c('turkuadi','BERT-TR-Ort','BERT-TR-Var-Ort')], caption = "En Dingin İlk 10 Türkü (BERT-TR-Var-Ort)", row.names = F) %>%
+  kable_classic_2(full_width = F) %>%
+  kable_paper("striped", full_width = F)  %>%
+  row_spec(1:3,bold = T, color = "white", background = "#D7261E")
+```
+
+
+
+#Kelime bulutu: 1-gram üzerinden
+```{r ,   echo = FALSE, results = TRUE}
+set.seed(1234) # for reproducibility 
+wordcloud(words = df$word, freq = df$freq, min.freq = 1,
+          max.words=200, random.order=FALSE, rot.per=0.35,
+          colors=brewer.pal(8, "Dark2"))
+
+```
+
+#Kelime bulutu: 2-gram üzerinden
+```{r ,   echo = FALSE, results = TRUE}
+set.seed(1234) # for reproducibility 
+wordcloud(words = as.character(df2$ngrams), freq = df2$freq, min.freq = 1,
+          max.words=200, random.order=FALSE, rot.per=0.35,
+          colors=brewer.pal(8, "Dark2"))
+
+```
+
+
+# Spotify Tanımlayıcı İstatistikleri
+```{r , echo=FALSE}
+specdesc <- turkuler[,c('acousticness','danceability','energy','instrumentalness',
+'liveness', 'loudness', 'speechiness', 'tempo', 'valence', 'popularity')]
+specdesc <- specdesc[specdesc$loudness!='',]
+specdesc <- data.frame(sapply(specdesc,  function(x)  as.numeric(as.character(x))))
+
+
+
+specdesc <- specdesc %>%
+  summarise_each(funs(min = min(., na.rm = TRUE), 
+                      median = median(., na.rm = TRUE),
+                      mean = mean(., na.rm = TRUE), 
+                      max = max(., na.rm = TRUE),
+                      sum = sum(., na.rm = TRUE), 
+                      sd = sd(., na.rm = TRUE)))
+
+specdesc <- specdesc %>% gather(stat, val) %>%
+  separate(stat, into = c("var", "stat"), sep = '_') %>%
+  spread(stat, val) %>%
+  select(var, min, median, mean, max, sum, sd)
+
+names(specdesc) <- c('Değişken','Minimum', 'Ortanca','Ortalama', 'Maximum', 'Toplam', 'Standart Sapma')
+
+#Turkçe Değişken Adları
+specdesc$Değişken <- c('akustiklik', 'dans-edilebilirlik', 'enerji', 'enstrümantallik',
+                     'canlılık', 'ses-yüksekliği', 'konuşma', 'tempo', 'değerlik', 'popülerlik')
+
+```
+
+```{r ,  echo = FALSE, results = TRUE}
+kbl(specdesc, caption = "Platform Verilerinin Tanımlayıcı İstatistikleri", row.names = F)%>%
+  kable_classic_2(full_width = T) %>%
+  kable_paper("striped", full_width = T)
+```
+
+
+
+
+# Duygu Endeksi Analizi
+```{r , echo=FALSE}
+duyguendeksi <- turkuler[,c('turkuadi', 'turkuadi2', 'BERT-TR-Ort', 'BERT-TR-Var-Ort', 'danceability', 'energy', 'valence')]
+duyguendeksi <- duyguendeksi[duyguendeksi$danceability!='',]
+duyguendeksi[,3:7] <- data.frame(sapply(duyguendeksi[,3:7],  function(x)  as.numeric(as.character(x))))
+duyguendeksi$platform <- (duyguendeksi$danceability+duyguendeksi$energy+duyguendeksi$valence)/3
+
+normalize <- function(x, na.rm = TRUE) {
+    return((x- min(x)) /(max(x)-min(x)))
+}
+
+duyguendeksi$SozNorm <- (2*normalize(duyguendeksi$`BERT-TR-Ort`)-1)
+duyguendeksi$BesNorm <- (2*normalize(duyguendeksi$platform)-1)
+
+
+
+                     
+```
+
+
+```{r ,  echo = FALSE, results = TRUE}
+#plot(duyguendeksi$SozNorm, duyguendeksi$BesNorm)
+#rownames(duyguendeksi) <- 1:nrow(duyguendeksi)
+duyguendeksi$id <- as.numeric(rownames(duyguendeksi))
+duyguendeksi$BesNormNeg <- ifelse(duyguendeksi$BesNorm>0,1,-1)
+duyguendeksi$SozNormNeg <- ifelse(duyguendeksi$SozNorm>0,1,-1)
+duyguendeksi$renk = duyguendeksi$BesNorm+duyguendeksi$SozNorm
+
+w <- 1000 
+h <- 800
+scaling <- 0.5
+
+png(paste0(respath,'DuyguAtlasi','.png'), width = w, height = h)
+ggplot( ) + theme_minimal() +
+  geom_hline(yintercept = 0) +
+  geom_vline(xintercept = 0) +
+  scale_x_continuous(limits = c(-1.1, 1.1)) +
+  scale_y_continuous(limits = c(-1.1, 1.1)) +
+  xlab("Beste Ölçeği") + ylab("Söz Ölçeği")+
+  geom_point()+
+  geom_text(data=duyguendeksi,aes(x=SozNorm, y=BesNorm, label = id, color=renk),  size=5) +
+  scale_color_gradientn(colours = c("black", "purple", "orange", "red")) +
+  ggplot2::annotate("text", x = 0.08, y = -1.1, label = "Melankolik") +
+  ggplot2::annotate("text", x = 0.07, y = +1.1, label = "Eğlenceli") +
+  ggplot2::annotate("text", x = 1.1, y = -0.02, label = "Mutlu") +
+  ggplot2::annotate("text", x = -1.1, y = -0.02, label = "Efkarlı") +
+  labs(color='Eğlenceli-Mutlu')
+
+  #geom_rect(aes(xmin = 1, xmax = 1.5, ymin = 0, ymax = 100, fill = duyguendeksi$renk), size=4, position = 1)
+
+  #scale_color_gradient2(midpoint = 0, low = "black", mid = "brown",  high = "red", space = "Lab" )
+
+  
+#  geom_text(data = ann_text, aes(x = SozNorm, y = y, label = LABEL, color = colorRed)) +
+#  scale_color_manual(values = c('TRUE' = 'red', 'FALSE' = 'black'), guide = "none")
+
+dev.off()
+
+write.csv(duyguendeksi, file=paste0(respath,'duyguendeksi.csv'))
+  
+```
